@@ -1,6 +1,6 @@
 var cfg = require('./config').config
 	, _ = require('underscore')
-	, checks = require('./appConstraints')
+	, util = require('./appUtil')
 	, httpPing = require('./httpPing').httpPing;
 
 
@@ -21,7 +21,7 @@ var getNewApp = function(){
 				validActions: ['start']
 			},
 			running: {
-				validActions: ['stop','resetPair','resetSUT']
+				validActions: ['stop','resetPair','resetSUT','resetAll']
 			},
 			sutUnresponsive: {
 				validActions: ['resetSUT','resetAll']
@@ -41,19 +41,21 @@ var getNewApp = function(){
 	return toReturn;
 };
 
-var _timer = null;
-
 var _pingSUT = function(){
 	console.log('pinging SUT...');
 
-	_timer = setTimeout(function(){
-		httpPing({
-				hostname: 'localhost',
-			 	port: 3000,
-				method: 'GET'
-			},
+	setTimeout(function(){
+		httpPing(
+			cfg.sutPingOptions,
 			function(){
 				console.log('ping SUT success');
+
+				_myApp.currentState = 
+					_myApp.currentState === 'allBroken' ||
+					_myApp.currentState === 'pairUnresponsive' ?
+						_myApp.currentState = 'pairUnresponsive' :
+						_myApp.currentState = 'running';
+
 				_pingSUT();
 			},
 			function(){
@@ -63,6 +65,8 @@ var _pingSUT = function(){
 					_myApp.currentState === 'allBroken' ?
 						_myApp.currentState = 'allBroken' :
 						_myApp.currentState = 'sutUnresponsive';
+
+				_pingSUT();
 			});
 		}, 
 	cfg.pingSUTTimeout);
@@ -71,11 +75,18 @@ var _pingSUT = function(){
 var _pingPair = function(){
 	console.log('pinging pair...');
 
-	_timer = setTimeout(function(){
+	setTimeout(function(){
 		httpPing(
 			cfg.pairPingOptions,
 			function(){
 				console.log('ping pair success');
+
+				_myApp.currentState = 
+					_myApp.currentState === 'allBroken' ||
+					_myApp.currentState === 'sutUnresponsive' ?
+						_myApp.currentState = 'sutUnresponsive' :
+						_myApp.currentState = 'running';
+
 				_pingPair();
 			},
 			function(){
@@ -85,23 +96,18 @@ var _pingPair = function(){
 					_myApp.currentState === 'allBroken' ?
 						_myApp.currentState = 'allBroken' :
 						_myApp.currentState = 'pairUnresponsive';
+
+				_pingPair();
 			});
 		}, 
 	cfg.pingPairTimeout);
 };
 
-var _resetPair_PingPair = function(){
-	httpPing(
-		cfg.pairResetPairOptions,
-		function(){},
-		function(){});
-};
+actions.resetAll = function(app){
 
-var _resetPair_PingSUT = function(){
-	httpPing(
-		cfg.pairResetSUTOptions,
-		function(){},
-		function(){});
+	app.currentState = 'running';
+
+	return 'OK';
 };
 
 actions.resetPair = function(app){
@@ -111,8 +117,6 @@ actions.resetPair = function(app){
 		_myApp.currentState === 'allBroken' ?
 			_myApp.currentState = 'sutUnresponsive' :
 			_myApp.currentState = 'running';
-
-	_pingPair();
 
 	return 'OK';
 };
@@ -125,20 +129,12 @@ actions.resetSUT = function(app){
 			_myApp.currentState = 'pairUnresponsive' :
 			_myApp.currentState = 'running';
 
-	//i.e. the pair is responsive
-	if(_myApp.currentState === 'running'){
-		_resetPair_PingSUT();
-	}
-
-	_pingSUT();
-
 	return 'OK';
 };
 
 actions.start = function(app){
 	_pingSUT();
 	_pingPair();
-	_resetPair_PingPair();
 
 	app.currentState = 'running';
 
@@ -158,7 +154,6 @@ var _do = function(/* args */){
 
 	var _app = args[0];
 	var _action = args[1];
-//	var app = _copy(_app);
 	var app = _myApp;
 
 	var fun = actions[_action];
@@ -166,7 +161,7 @@ var _do = function(/* args */){
 		throw ('Client error: unknown action requested ' + _action);
 	}
 
-	var errs = checks.isValidAction(app,_action);
+	var errs = util.isValidAction(app,_action);
 	if(errs.length > 0){
 		throw ('Client error: invalid action ' + _action);
 	}

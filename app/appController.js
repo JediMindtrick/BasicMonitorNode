@@ -1,11 +1,13 @@
-var appMod = require('./app');
+var appMod = require('./app')
+	, util = require('./appUtil');
 var	app = appMod.getNewApp();
 app = appMod.doAction(app,'start');
 
 exports.health = function(){
 	return {
 		actions: app.actions,
-		status: app.currentState
+		status: app.currentState,
+		nextValidActions: util.getNextValidActions(app)
 	};
 };
 
@@ -36,7 +38,8 @@ exports.handleAction = function(req,res){
 
 	res.status(200).send({
 		actions: app.actions,
-		status: app.currentState
+		status: app.currentState,
+		nextValidActions: util.getNextValidActions(app)
 	});
 
 	return;
