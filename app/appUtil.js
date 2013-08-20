@@ -20,6 +20,14 @@ var _isValidAction = _.validator(
 		return actions.indexOf(action) > -1;
 	});
 
+var _getUrlFromOptions = function(opt){
+	return '' +
+		(opt.method ? opt.method : 'GET') + ' ' +
+		opt.hostname + ':' + opt.port + 
+		(opt.path ? opt.path : '/');
+};
+
 exports.getCurrentState = getCurrentState;
 exports.getNextValidActions = getNextValidActions;
 exports.isValidAction = _.checker(_isValidAction);
+exports.getUrlFromOptions = _getUrlFromOptions;

@@ -1,11 +1,11 @@
 var cfg = require('./config').config
 	, _ = require('underscore')
 	, util = require('./appUtil')
-	, httpPing = require('./httpPing').httpPing;
+	, httpPing = require('./httpPing').httpPing
+	, messaging = require('./messagingGateway');
 
 
 var _copy = function(app){
-
 	return JSON.parse(
 		JSON.stringify(app));
 };	
@@ -41,6 +41,20 @@ var getNewApp = function(){
 	return toReturn;
 };
 
+var _handlePingError = function(failedSystem,body){
+	console.log('ping ' + failedSystem + ' error');
+
+	var msg = JSON.parse(JSON.stringify(cfg.pingFailureEmail.message));
+
+	msg.customProperties.EmailFrom = msg.customProperties.EmailFrom.replace('[port here]',cfg.port.toString());
+	msg.customProperties.EmailSubject = msg.customProperties.EmailSubject
+		.replace('[system here]',failedSystem)
+		.replace('[port here]',cfg.port.toString());
+	msg.customProperties.EmailBody = body;
+
+	messaging.sendEmail(msg,cfg.pingFailureNotificationAddresses);
+};
+
 var _pingSUT = function(){
 	console.log('pinging SUT...');
 
@@ -59,7 +73,13 @@ var _pingSUT = function(){
 				_pingSUT();
 			},
 			function(){
-				console.log('ping SUT error');
+				if(['running','stopped','pairUnresponsive']
+					.indexOf(_myApp.currentState) > -1){
+					_handlePingError("SUT",'Unable to reach ' +
+						util.getUrlFromOptions(cfg.sutPingOptions) +  
+						' through http ping.');
+				}
+
 				_myApp.currentState = 
 					_myApp.currentState === 'pairUnresponsive' || 
 					_myApp.currentState === 'allBroken' ?
@@ -90,7 +110,14 @@ var _pingPair = function(){
 				_pingPair();
 			},
 			function(){
-				console.log('ping pair error');
+
+				if(['running','stopped','sutUnresponsive']
+					.indexOf(_myApp.currentState) > -1){
+					_handlePingError("Pair",'Unable to reach ' +
+						util.getUrlFromOptions(cfg.pairPingOptions) +  
+						' through http ping.');
+				}
+
 				_myApp.currentState = 
 					_myApp.currentState === 'sutUnresponsive' || 
 					_myApp.currentState === 'allBroken' ?

@@ -23,5 +23,19 @@ exports.config = {
 		method: 'GET',
 		path: '/admin/health'
 	},
-	pingPairTimeout: 5000
+	pingPairTimeout: 5000,
+	pingFailureEmail: {
+		body:'',
+		message: {
+			customProperties: {
+				EmailFrom: 'CredAbility-Monitoring@CredAbility.org',
+				EmailTo: 'brandonjwilhite@gmail.com',
+				EmailSubject: 'Node-[port here]-Ping Failure-System-[system here]',
+				EmailBody: '',
+				RawContent: '',
+				Agent: ''
+			}
+		}
+	},
+	pingFailureNotificationAddresses: ['brandonjwilhite@gmail.com']
 };
