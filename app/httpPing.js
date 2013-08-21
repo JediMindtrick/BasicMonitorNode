@@ -1,5 +1,6 @@
 var http = require('http');
 
+/*
 var edge = require('edge');
 
 var jsAuthenticatedPing = edge.func({
@@ -7,6 +8,7 @@ var jsAuthenticatedPing = edge.func({
     typeName: 'Pings.Http',
     methodName: 'jsAuthenticatedPing'
 });
+*/
 
 /*
 NOTE:  Using the longer version of creating and running the request,
@@ -36,6 +38,7 @@ var pingSite = function(options,onSuccess,onFailure){
 	req.end();
 };
 
+/*
 var authenticatedPing = function(options,onSuccess,onFailure){
 
 	jsAuthenticatedPing(options, function (error, result) {
@@ -51,6 +54,7 @@ var authenticatedPing = function(options,onSuccess,onFailure){
 	    onSuccess(result);
 	});
 };
+*/
 
 exports.httpPing = pingSite;
-exports.authenticatedPing = authenticatedPing;
+//exports.authenticatedPing = authenticatedPing;

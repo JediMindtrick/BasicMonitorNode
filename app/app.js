@@ -1,10 +1,12 @@
 var cfg = require('./config').config
 	, _ = require('underscore')
 	, util = require('./appUtil')
+	, pings = require('./httpPing')
 	, httpPing = require('./httpPing').httpPing
 	, authenticatedPing = require('./httpPing').authenticatedPing
 	, messaging = require('./messagingGateway')
-	, creds = require('./credentials');
+	, creds = require('./credentials')
+	, myName = require('./name').name;
 
 
 var _copy = function(app){
@@ -23,16 +25,16 @@ var getNewApp = function(){
 				validActions: ['start']
 			},
 			running: {
-				validActions: ['stop','resetPair','resetSUT','resetAll']
+				validActions: ['stop']
 			},
 			sutUnresponsive: {
-				validActions: ['resetSUT','resetAll']
+				validActions: []
 			},
 			pairUnresponsive: {
-				validActions: ['resetPair','resetAll']
+				validActions: []
 			},
 			allBroken: {
-				validActions: ['resetSUT','resetPair','resetAll']
+				validActions: []
 			}
 		},
 		actions: []
@@ -43,132 +45,79 @@ var getNewApp = function(){
 	return toReturn;
 };
 
+//two statuses right now "OK" and "ERROR"
+var _monitors = {};
+var _getMonitor = function(monitorName){
+	return _monitors[monitorName];
+};
+
 var _handlePingError = function(failedSystem,body){
-	console.log('ping ' + failedSystem + ' error');
 
 	var msg = _copy(cfg.pingFailureEmail.message);
 
 	msg.customProperties.EmailFrom = msg.customProperties.EmailFrom.replace('[port here]',cfg.port.toString());
 	msg.customProperties.EmailSubject = msg.customProperties.EmailSubject
 		.replace('[system here]',failedSystem)
-		.replace('[port here]',cfg.port.toString());
+		.replace('[name here]', myName);
 	msg.customProperties.EmailBody = body;
 
 	messaging.sendEmail(msg,cfg.pingFailureNotificationAddresses);
 };
 
-var _pingSUT = function(){
-	console.log('pinging SUT...');
+var _monitor = function(monitor,_myApp,config){
 
-	var opts = _copy(cfg.pairPingOptions);
-	opts.username = creds.crmUsername;
-	opts.password = creds.crmPassword;
+	_monitors[monitor.systemName] = {
+		monitor: monitor,
+		status: "OK"
+	};
 
-	setTimeout(function(){
-		authenticatedPing(
-			opts,
-			function(){
-				console.log('ping SUT success');
+	var _pingSUT = function(){
 
-				_myApp.currentState = 
-					_myApp.currentState === 'allBroken' ||
-					_myApp.currentState === 'pairUnresponsive' ?
-						_myApp.currentState = 'pairUnresponsive' :
-						_myApp.currentState = 'running';
+		console.log('pinging ' + monitor.systemName + '...');
 
-				_pingSUT();
-			},
-			function(){
-				if(['running','stopped','pairUnresponsive']
-					.indexOf(_myApp.currentState) > -1){
-					_handlePingError("SUT",'Unable to reach ' +
-						util.getUrlFromOptions(cfg.sutPingOptions) +  
-						' through http ping.');
-				}
+		var opts = _copy(monitor.pingOptions);
+		opts.username = creds.crmUsername;
+		opts.password = creds.crmPassword;
 
-				_myApp.currentState = 
-					_myApp.currentState === 'pairUnresponsive' || 
-					_myApp.currentState === 'allBroken' ?
-						_myApp.currentState = 'allBroken' :
-						_myApp.currentState = 'sutUnresponsive';
+		setTimeout(function(){
+			pings[monitor.pingFunction](
+				opts,
+				function(){
+					console.log('ping ' + monitor.systemName + ' success');
 
-				_pingSUT();
-			});
-		}, 
-	cfg.pingSUTTimeout);
-};
+					_getMonitor(monitor.systemName).status = "OK";
 
-var _pingPair = function(){
-	console.log('pinging pair...');
+					_pingSUT();
+				},
+				function(){
 
-	setTimeout(function(){
-		httpPing(
-			cfg.pairPingOptions,
-			function(){
-				console.log('ping pair success');
+					console.log('ping ' + monitor.systemName + ' error');
 
-				_myApp.currentState = 
-					_myApp.currentState === 'allBroken' ||
-					_myApp.currentState === 'sutUnresponsive' ?
-						_myApp.currentState = 'sutUnresponsive' :
-						_myApp.currentState = 'running';
+					if(_getMonitor(monitor.systemName).status === "OK"){
+						_handlePingError(monitor.systemName,'Unable to reach ' +
+							util.getUrlFromOptions(monitor.pingOptions) +  
+							' through http ping.');
+					}
 
-				_pingPair();
-			},
-			function(){
+					_getMonitor(monitor.systemName).status = "ERROR";
 
-				if(['running','stopped','sutUnresponsive']
-					.indexOf(_myApp.currentState) > -1){
-					_handlePingError("Pair",'Unable to reach ' +
-						util.getUrlFromOptions(cfg.pairPingOptions) +  
-						' through http ping.');
-				}
+					_pingSUT();
+				});
+			}, 
+			monitor.timeout);
+	};
 
-				_myApp.currentState = 
-					_myApp.currentState === 'sutUnresponsive' || 
-					_myApp.currentState === 'allBroken' ?
-						_myApp.currentState = 'allBroken' :
-						_myApp.currentState = 'pairUnresponsive';
 
-				_pingPair();
-			});
-		}, 
-	cfg.pingPairTimeout);
-};
-
-actions.resetAll = function(app){
-
-	app.currentState = 'running';
-
-	return 'OK';
-};
-
-actions.resetPair = function(app){
-	if(app.currentState === 'running') return;
-
-	app.currentState = 
-		_myApp.currentState === 'allBroken' ?
-			_myApp.currentState = 'sutUnresponsive' :
-			_myApp.currentState = 'running';
-
-	return 'OK';
-};
-
-actions.resetSUT = function(app){
-	if(app.currentState === 'running') return;
-
-	app.currentState = 
-		_myApp.currentState === 'allBroken' ?
-			_myApp.currentState = 'pairUnresponsive' :
-			_myApp.currentState = 'running';
-
-	return 'OK';
+	console.log('starting monitor ' + monitor.systemName);
+	_pingSUT();
 };
 
 actions.start = function(app){
-	_pingSUT();
-	_pingPair();
 
+	_.each(cfg.monitors,function(monitor){
+		_monitor(monitor,_myApp,cfg);
+	});
+	
 	app.currentState = 'running';
 
 	return 'OK';
