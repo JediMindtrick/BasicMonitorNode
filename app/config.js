@@ -11,15 +11,16 @@ exports.config = {
 	ipHash: md5.digest('hex'),
 
 	sutPingOptions:{
-		hostname: 'localhost',
-		port:3000,
-		method:'GET'
+		hostname: 'dtcvmcrm00',
+		port:7073,
+		method:'GET',
+		path:'/Advisor/Advisor.html'
 	},
 	pingSUTTimeout: 5000,
 
 	pairPingOptions: {
-		hostname: 'localhost',
-	 	port: 2001,
+		hostname: 'atlvmap02',
+	 	port: 2000,
 		method: 'GET',
 		path: '/admin/health'
 	},

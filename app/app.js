@@ -2,7 +2,9 @@ var cfg = require('./config').config
 	, _ = require('underscore')
 	, util = require('./appUtil')
 	, httpPing = require('./httpPing').httpPing
-	, messaging = require('./messagingGateway');
+	, authenticatedPing = require('./httpPing').authenticatedPing
+	, messaging = require('./messagingGateway')
+	, creds = require('./credentials');
 
 
 var _copy = function(app){
@@ -44,7 +46,7 @@ var getNewApp = function(){
 var _handlePingError = function(failedSystem,body){
 	console.log('ping ' + failedSystem + ' error');
 
-	var msg = JSON.parse(JSON.stringify(cfg.pingFailureEmail.message));
+	var msg = _copy(cfg.pingFailureEmail.message);
 
 	msg.customProperties.EmailFrom = msg.customProperties.EmailFrom.replace('[port here]',cfg.port.toString());
 	msg.customProperties.EmailSubject = msg.customProperties.EmailSubject
@@ -58,9 +60,13 @@ var _handlePingError = function(failedSystem,body){
 var _pingSUT = function(){
 	console.log('pinging SUT...');
 
+	var opts = _copy(cfg.pairPingOptions);
+	opts.username = creds.crmUsername;
+	opts.password = creds.crmPassword;
+
 	setTimeout(function(){
-		httpPing(
-			cfg.sutPingOptions,
+		authenticatedPing(
+			opts,
 			function(){
 				console.log('ping SUT success');
 

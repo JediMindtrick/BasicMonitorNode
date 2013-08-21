@@ -1,5 +1,13 @@
 var http = require('http');
 
+var edge = require('edge');
+
+var jsAuthenticatedPing = edge.func({
+    assemblyFile: './bin/Pings.dll',
+    typeName: 'Pings.Http',
+    methodName: 'jsAuthenticatedPing'
+});
+
 /*
 NOTE:  Using the longer version of creating and running the request,
 because the shorter http.get() seems to hang the script.  Even though
@@ -28,4 +36,21 @@ var pingSite = function(options,onSuccess,onFailure){
 	req.end();
 };
 
+var authenticatedPing = function(options,onSuccess,onFailure){
+
+	jsAuthenticatedPing(options, function (error, result) {
+	    if (error){
+	    	onFailure(error);
+	    	return;	
+	    } 
+	    if(!result){
+	    	onFailure('Ping failed');
+	    	return;
+	    }
+
+	    onSuccess(result);
+	});
+};
+
 exports.httpPing = pingSite;
+exports.authenticatedPing = authenticatedPing;
